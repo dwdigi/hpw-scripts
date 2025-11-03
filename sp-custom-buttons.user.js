@@ -3,7 +3,7 @@
 // @namespace   Sharepoint Scripts
 // @match       https://hpwessen.sharepoint.com/**
 // @grant       none
-// @version     1.2
+// @version     1.4
 // @author      Vivian Klein
 // @description Fügt client-seitige Buttons zum Aufrufen der Ansichten "Seiten", "Dokumente" und "Websiteinhalte" hinzu
 // @run-at      document-start
@@ -13,7 +13,234 @@
 (function() {
     'use strict';
 
+    // Version Management
+    const CURRENT_VERSION = "1.4";
+    const STORAGE_KEY = "sp-custom-buttons-version";
+
+    // Changelog - Add new versions at the top
+    const CHANGELOG = {
+        "1.4": {
+            date: "2025-11-03",
+            changes: [
+                "Kleinere Verbesserungen für Release 1.4"
+            ]
+        },
+        "1.3": {
+            date: "2025-11-03",
+            changes: [
+                "Versionsmanagement hinzugefügt",
+                "Fix: In einigen Fällen wurde der falsche Kontext durch die Buttons geöffnet"
+            ]
+        },
+        "1.2": {
+            date: "2025-10-15",
+            changes: [
+                "Fix: Hook für Buttons wurde in manchen Browsern zur falschen Zeit ausgeführt"
+            ]
+        }
+    };
+
     let buttonsAdded = false;
+
+    // Version & Changelog Functions
+    function getLastVersion() {
+        return localStorage.getItem(STORAGE_KEY);
+    }
+
+    function setLastVersion(version) {
+        localStorage.setItem(STORAGE_KEY, version);
+    }
+
+    function compareVersions(v1, v2) {
+        const parts1 = v1.split('.').map(Number);
+        const parts2 = v2.split('.').map(Number);
+        for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+            const num1 = parts1[i] || 0;
+            const num2 = parts2[i] || 0;
+            if (num1 > num2) return 1;
+            if (num1 < num2) return -1;
+        }
+        return 0;
+    }
+
+    function getNewChanges(lastVersion) {
+        const changes = [];
+        for (const [version, data] of Object.entries(CHANGELOG)) {
+            if (!lastVersion || compareVersions(version, lastVersion) > 0) {
+                changes.push({ version, ...data });
+            }
+        }
+        return changes.sort((a, b) => compareVersions(b.version, a.version));
+    }
+
+    function showChangelog(changes) {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        `;
+
+        // Create popup
+        const popup = document.createElement('div');
+        popup.style.cssText = `
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+            color: white;
+            padding: 20px;
+            font-size: 20px;
+            font-weight: 600;
+        `;
+        header.textContent = '🎉 SharePoint Custom Buttons - Was ist neu?';
+
+        // Content
+        const content = document.createElement('div');
+        content.style.cssText = `
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        `;
+
+        changes.forEach(({ version, date, changes: changeList }) => {
+            const versionBlock = document.createElement('div');
+            versionBlock.style.cssText = `
+                margin-bottom: 24px;
+            `;
+
+            const versionHeader = document.createElement('div');
+            versionHeader.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 10px;
+            `;
+
+            const versionBadge = document.createElement('span');
+            versionBadge.style.cssText = `
+                background: #0078d4;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-weight: 600;
+                font-size: 14px;
+            `;
+            versionBadge.textContent = `v${version}`;
+
+            const dateBadge = document.createElement('span');
+            dateBadge.style.cssText = `
+                color: #666;
+                font-size: 14px;
+            `;
+            dateBadge.textContent = date;
+
+            versionHeader.appendChild(versionBadge);
+            versionHeader.appendChild(dateBadge);
+
+            const changesList = document.createElement('ul');
+            changesList.style.cssText = `
+                margin: 0;
+                padding-left: 20px;
+                color: #333;
+            `;
+
+            changeList.forEach(change => {
+                const li = document.createElement('li');
+                li.style.cssText = `
+                    margin: 6px 0;
+                    line-height: 1.5;
+                `;
+                li.textContent = change;
+                changesList.appendChild(li);
+            });
+
+            versionBlock.appendChild(versionHeader);
+            versionBlock.appendChild(changesList);
+            content.appendChild(versionBlock);
+        });
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.style.cssText = `
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+        `;
+
+        const okButton = document.createElement('button');
+        okButton.style.cssText = `
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        `;
+        okButton.textContent = 'OK';
+        okButton.onmouseover = () => okButton.style.background = '#106ebe';
+        okButton.onmouseout = () => okButton.style.background = '#0078d4';
+        okButton.onclick = () => {
+            setLastVersion(CURRENT_VERSION);
+            document.body.removeChild(overlay);
+        };
+
+        footer.appendChild(okButton);
+
+        // Assemble popup
+        popup.appendChild(header);
+        popup.appendChild(content);
+        popup.appendChild(footer);
+        overlay.appendChild(popup);
+
+        // Add to page
+        document.body.appendChild(overlay);
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                setLastVersion(CURRENT_VERSION);
+                document.body.removeChild(overlay);
+            }
+        });
+    }
+
+    function checkVersion() {
+        const lastVersion = getLastVersion();
+        const newChanges = getNewChanges(lastVersion);
+        
+        if (newChanges.length > 0) {
+            console.log('[SharePoint Custom Buttons] New version detected, showing changelog');
+            // Wait for page to be fully ready before showing popup
+            setTimeout(() => showChangelog(newChanges), 1000);
+        } else {
+            console.log('[SharePoint Custom Buttons] No new updates');
+        }
+    }
 
     function createCustomAnchor(title, idSuffix, relativeUrl, svgPath) {
         const elemToAppend = document.createElement("a");
@@ -31,14 +258,17 @@
         elemToAppend.setAttribute("aria-expanded", "false");
         elemToAppend.setAttribute("aria-haspopup", "dialog");
 
-        // Dynamisch URL erzeugen
-        const { origin, pathname } = window.location;
-        const pathParts = pathname.split("/").filter(Boolean);
-        let href = `${origin}${relativeUrl}`; // fallback
-        if (pathParts[0] === "sites" && pathParts.length >= 2) {
-            href = `${origin}/sites/${pathParts[1]}${relativeUrl}`;
-        }
-        elemToAppend.setAttribute("href", href);
+        // Dynamisch URL erzeugen beim Klick (nicht beim Erstellen)
+        elemToAppend.addEventListener("click", (e) => {
+            e.preventDefault();
+            const { origin, pathname } = window.location;
+            const pathParts = pathname.split("/").filter(Boolean);
+            let href = `${origin}${relativeUrl}`; // fallback
+            if (pathParts[0] === "sites" && pathParts.length >= 2) {
+                href = `${origin}/sites/${pathParts[1]}${relativeUrl}`;
+            }
+            window.location.href = href;
+        });
 
         const icon = document.createElement("i");
         icon.setAttribute("aria-hidden", "true");
@@ -155,12 +385,7 @@
         }
     }).observe(document, { subtree: true, childList: true });
 
-})();// ==UserScript==
-// @name        New script mozilla.org
-// @namespace   Violentmonkey Scripts
-// @match       https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/*
-// @grant       none
-// @version     1.0
-// @author      -
-// @description 10/17/2025, 10:40:38 AM
-// ==/UserScript==
+    // Check for version updates
+    checkVersion();
+
+})();
